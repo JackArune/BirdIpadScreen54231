@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bird Collage">
+<meta name="theme-color" content="#1b2233">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Bird Collage</title>
+<style>
+  :root {
+    --bg: #f4ecdc;      /* set live by the time-of-day colour shift */
+    --bg2: #eadfc8;
+    --ink: #2c2a26;
+    --soft: #6f675a;
+    --card: rgba(255,255,255,0.55);
+    --accent: #c9773a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Avenir Next", "Avenir", "Helvetica Neue", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 4s linear, color 4s linear;
+  }
+  /* The stage always fills the whole screen. Its size is set in script so that
+     everything scales with the screen and the birds spread out to the edges,
+     in landscape or portrait, on any iPad, phone or computer. */
+  #stage {
+    position: absolute; left: 0; top: 0;
+    width: 1112px; height: 834px;
+    transform-origin: 0 0;
+    background: radial-gradient(ellipse at 50% 45%, var(--bg) 0%, var(--bg) 45%, var(--bg2) 100%);
+    transition: background 4s linear;
+    overflow: hidden;
+  }
+
+  /* Clock */
+  #clock {
+    position: absolute; left: 0; right: 0; top: 246px; /* moved in script */
+    text-align: center; pointer-events: none;
+    transition: top 1s ease;
+  }
+  #time {
+    font-size: 160px; font-weight: 200; letter-spacing: -4px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  #ampm { font-size: 40px; font-weight: 400; letter-spacing: 1px; margin-left: 8px; color: var(--soft); }
+  #date { margin-top: 10px; font-size: 26px; font-weight: 500; color: var(--soft); letter-spacing: 0.5px; }
+  #count { margin-top: 16px; font-size: 22px; font-weight: 500; color: var(--soft); }
+  #count b { color: var(--ink); font-weight: 600; }
+
+  /* Weather (top centre) */
+  #weather {
+    position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    font-size: 30px; font-weight: 500; white-space: nowrap;
+  }
+  #weather svg { width: 74px; height: 74px; overflow: visible; }
+  #wdesc { font-size: 20px; color: var(--soft); display: block; font-weight: 500; }
+
+  /* Birds */
+  .bird {
+    position: absolute; width: 260px; margin-left: -130px;
+    text-align: center;
+    transition: transform 1.2s cubic-bezier(.2,.8,.2,1), opacity 1.2s ease, left 1.2s ease, top 1.2s ease;
+    opacity: 0;
+  }
+  .bird.show { opacity: 1; }
+  .bird .pic {
+    width: 220px; height: 170px; margin: 0 auto;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .bird img { max-width: 220px; max-height: 170px; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.18)); }
+  .bird .noimg {
+    width: 120px; height: 120px; border-radius: 50%; margin-bottom: 18px;
+    background: var(--card); display: flex; align-items: center; justify-content: center;
+    font-size: 54px; color: var(--soft);
+  }
+  .bird .name {
+    margin-top: 6px; font-size: 24px; font-weight: 600; line-height: 1.15;
+    display: inline-block; padding: 4px 12px; border-radius: 14px; background: var(--card);
+  }
+  .bird .ago { margin-top: 4px; font-size: 17px; color: var(--soft); font-weight: 500; }
+  .bird.fresh .pic { animation: pop 1.4s ease-out; }
+  @keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+  #empty {
+    position: absolute; left: 0; right: 0; top: 640px; text-align: center;
+    font-size: 22px; color: var(--soft); font-weight: 500;
+  }
+
+  /* Status line (bottom) */
+  #status {
+    position: absolute; left: 24px; bottom: 18px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 15px; color: var(--soft); font-weight: 500;
+  }
+  #dot { width: 10px; height: 10px; border-radius: 50%; background: #b9b2a5; }
+  #dot.on { background: #4caf6a; animation: breathe 2.4s ease-in-out infinite; }
+  #dot.warn { background: #d9893c; }
+  @keyframes breathe { 50% { opacity: .35; } }
+  #level { width: 54px; height: 6px; border-radius: 3px; background: rgba(128,128,128,.25); overflow: hidden; }
+  #levelbar { height: 100%; width: 0%; background: var(--soft); transition: width .25s linear; }
+  #credit { position: absolute; right: 24px; bottom: 16px; max-width: 52%; text-align: right; line-height: 1.35;
+            font-size: 11px; color: var(--soft); opacity: .7; }
+  #debug { position: absolute; left: 24px; bottom: 44px; font: 13px ui-monospace, Menlo, monospace; color: var(--soft); white-space: pre; }
+
+  /* Tap-to-start overlay */
+  #start {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(20, 24, 36, 0.82); color: #f4ecdc; text-align: center; padding: 30px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #start.hidden { display: none; }
+  #start h1 { font-size: 44px; font-weight: 300; }
+  #start p { font-size: 20px; max-width: 560px; line-height: 1.4; opacity: .85; }
+  #startbtn {
+    margin-top: 10px; font: inherit; font-size: 26px; font-weight: 600;
+    padding: 18px 44px; border-radius: 40px; border: 0;
+    background: #f4ecdc; color: #1b2233;
+  }
+  #startmsg { font-size: 17px; min-height: 24px; opacity: .8; }
+
+  /* Weather icon animations */
+  .spin { transform-origin: 50% 50%; animation: spin 40s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .drift { animation: drift 7s ease-in-out infinite; }
+  @keyframes drift { 50% { transform: translateX(5px); } }
+  .drop { animation: fall 1.1s linear infinite; }
+  @keyframes fall { 0% { transform: translateY(-6px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(14px); opacity: 0; } }
+  .flake { animation: flake 2.6s linear infinite; }
+  @keyframes flake { 0% { transform: translateY(-6px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(16px); opacity: 0; } }
+  .flash { animation: flash 3s steps(1) infinite; }
+  @keyframes flash { 0%, 88%, 100% { opacity: 0; } 90%, 94% { opacity: 1; } }
+  .fogline { animation: drift 5s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="weather"></div>
+  <div id="clock">
+    <div><span id="time">--:--</span><span id="ampm"></span></div>
+    <div id="date"></div>
+    <div id="count"></div>
+  </div>
+  <div id="birds"></div>
+  <div id="empty">Listening for birds…</div>
+  <div id="debug"></div>
+  <div id="status"><span id="dot"></span><span id="level"><span id="levelbar" style="display:block"></span></span><span id="stext">Starting…</span></div>
+  <div id="credit">Bird ID by BirdNET (Cornell Lab / TU Chemnitz) · Some illustrations AI-generated with Canva; others from AvianVisitors, CC BY-NC-SA 4.0 · Weather data by Open-Meteo.com, CC BY 4.0</div>
+</div>
+
+<div id="start">
+  <h1>Bird Collage</h1>
+  <p>This iPad will listen for birds through its microphone and show who's singing. Sound is analyzed on this iPad and never uploaded.</p>
+  <button id="startbtn">Start listening</button>
+  <div id="startmsg"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------------- Settings (override with URL, e.g. ?conf=0.8&clock=24&debug=1) ---------------- */
+  const Q = new URLSearchParams(location.search);
+  const num = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? v : d; };
+  const CFG = {
+    strong: num('conf', 0.7),      // one hit at or above this counts
+    weak: num('weak', 0.45),       // two hits at or above this within confirmWindow count
+    confirmWindow: 15000,          // ms
+    geo: num('geo', 0.03),         // location filter: hide species this unlikely here this week
+    interval: num('every', 1500),  // ms between analyses (each looks at the latest 3 s)
+    recount: 15000,                // ms: repeat hits of the same species within this count once
+    shown: 5,
+    debug: Q.get('debug') === '1',
+    use24h: Q.get('clock') === '24',
+  };
+
+  const SAMPLE_RATE = 48000;
+  const WINDOW = 144000; // 3 s
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  };
+
+  /* ---------------- Fill whatever screen this is ----------------
+     Everything is designed at iPad Air 3 size (1112 x 834 landscape, 834 x 1112
+     portrait). We scale by the screen's size, then stretch the stage to cover
+     the rest, so there are never empty bars and nothing gets cut off. */
+  let W = 1112, H = 834, portrait = false;
+  function fit() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    portrait = vh > vw * 1.05;
+    const s = portrait ? Math.min(vw / 834, vh / 1112) : Math.min(vw / 1112, vh / 834);
+    W = vw / s; H = vh / s;
+    const st = $('stage');
+    st.style.width = W + 'px'; st.style.height = H + 'px';
+    st.style.transform = `scale(${s})`;
+    if (typeof layout === 'function') layout();
+  }
+  addEventListener('resize', fit);
+  addEventListener('orientationchange', () => setTimeout(fit, 300));
+
+  /* ---------------- Today's birds (kept on this iPad only) ---------------- */
+  const dayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  let today = store.get('bc-today', null);
+  if (!today || today.day !== dayKey()) today = { day: dayKey(), total: 0, species: {}, slots: [] };
+  const saveToday = () => store.set('bc-today', today);
+
+  function rollDay() {
+    if (today.day !== dayKey()) { today = { day: dayKey(), total: 0, species: {}, slots: [] }; saveToday(); renderBirds(); }
+  }
+
+  /* ---------------- Illustrations (one bundle, loaded once) ---------------- */
+  let pics = {};
+  // Bump the ?v= number whenever birds.json changes, so iPads fetch the new pictures once
+  fetch('birds.json?v=3').then(r => r.ok ? r.json() : {}).then(j => { pics = j || {}; renderBirds(); }).catch(() => {});
+  const picFor = sci => pics[sci.toLowerCase().trim().replace(/\s+/g, '-')] || null;
+
+  /* ---------------- Clock + time-of-day colours ---------------- */
+  let sun = store.get('bc-sun', null); // { rise: ms, set: ms, day }
+  const PAL = {
+    night: { bg: '#1b2233', bg2: '#10141f', ink: '#efe6d3', soft: '#a39c8e', card: 'rgba(255,255,255,0.08)' },
+    warm:  { bg: '#f6d3b0', bg2: '#e9a985', ink: '#3b2a22', soft: '#7a5a48', card: 'rgba(255,255,255,0.45)' },
+    day:   { bg: '#f4ecdc', bg2: '#e6d9bf', ink: '#2c2a26', soft: '#6f675a', card: 'rgba(255,255,255,0.55)' },
+  };
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, t) => {
+    if (a.startsWith('rgba')) return t < 0.5 ? a : b;
+    const A = hex(a), B = hex(b);
+    return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  };
+  const blend = (p, q, t) => Object.fromEntries(Object.keys(p).map(k => [k, mix(p[k], q[k], t)]));
+
+  function palette(now) {
+    // Use real sunrise/sunset when we have it for today, otherwise 7:30 / 18:30
+    const d = new Date(now);
+    let rise, set;
+    if (sun && sun.day === dayKey()) { rise = sun.rise; set = sun.set; }
+    else { rise = new Date(d).setHours(7, 30, 0, 0); set = new Date(d).setHours(18, 30, 0, 0); }
+    const H = 3600e3, t = now;
+    const ramp = (x, a, b) => Math.min(1, Math.max(0, (x - a) / (b - a)));
+    if (t < rise - H) return PAL.night;
+    if (t < rise)     return blend(PAL.night, PAL.warm, ramp(t, rise - H, rise));
+    if (t < rise + H) return blend(PAL.warm, PAL.day, ramp(t, rise, rise + H));
+    if (t < set - H)  return PAL.day;
+    if (t < set)      return blend(PAL.day, PAL.warm, ramp(t, set - H, set));
+    if (t < set + H)  return blend(PAL.warm, PAL.night, ramp(t, set, set + H));
+    return PAL.night;
+  }
+
+  function applyPalette() {
+    const p = palette(Date.now()), r = document.documentElement.style;
+    r.setProperty('--bg', p.bg); r.setProperty('--bg2', p.bg2); r.setProperty('--ink', p.ink);
+    r.setProperty('--soft', p.soft); r.setProperty('--card', p.card);
+  }
+
+  function tickClock() {
+    const d = new Date();
+    let h = d.getHours(); const m = String(d.getMinutes()).padStart(2, '0');
+    if (CFG.use24h) { $('time').textContent = `${String(h).padStart(2, '0')}:${m}`; $('ampm').textContent = ''; }
+    else { $('ampm').textContent = h < 12 ? 'AM' : 'PM'; h = h % 12 || 12; $('time').textContent = `${h}:${m}`; }
+    $('date').textContent = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+
+  /* ---------------- Location ---------------- */
+  // Approximate location only: rounded to 0.1° (about 10 km) before it is used or saved.
+  // That's plenty for "which birds live around here" and for the weather, and it
+  // never pins down a house. The exact GPS position is thrown away immediately.
+  const approx = (lat, lon) => ({ lat: Math.round(lat * 10) / 10, lon: Math.round(lon * 10) / 10 });
+  let place = null; // { lat, lon }, approximate
+  if (Q.get('lat') && Q.get('lon')) place = approx(num('lat', 0), num('lon', 0));
+  else {
+    const saved = store.get('bc-place', null);
+    if (saved) { place = approx(saved.lat, saved.lon); store.set('bc-place', place); } // also rounds older exact saves
+  }
+
+  function getLocation() {
+    return new Promise(res => {
+      if (Q.get('lat') && Q.get('lon')) return res(place);
+      if (!navigator.geolocation) return res(place);
+      navigator.geolocation.getCurrentPosition(
+        p => { place = approx(p.coords.latitude, p.coords.longitude); store.set('bc-place', place); res(place); },
+        () => res(place),
+        { timeout: 15000, maximumAge: 6 * 3600e3, enableHighAccuracy: false }
+      );
+    });
+  }
+
+  /* ---------------- Weather (Open-Meteo, no key; sends a location rounded to ~10 km) ---------------- */
+  const WMO = c =>
+    c === 0 ? ['clear', 'Clear'] : c <= 2 ? ['partly', c === 1 ? 'Mostly clear' : 'Partly cloudy'] : c === 3 ? ['cloudy', 'Cloudy'] :
+    c <= 48 ? ['fog', 'Fog'] : c <= 57 ? ['rain', 'Drizzle'] : c <= 67 ? ['rain', 'Rain'] : c <= 77 ? ['snow', 'Snow'] :
+    c <= 82 ? ['rain', 'Showers'] : c <= 86 ? ['snow', 'Snow showers'] : ['storm', 'Thunderstorm'];
+
+  function icon(kind, isDay) {
+    const sunOrMoon = isDay
+      ? `<g class="spin"><circle cx="32" cy="32" r="12" fill="#f2b33d"/>${[0,45,90,135,180,225,270,315].map(a =>
+          `<line x1="32" y1="10" x2="32" y2="4" stroke="#f2b33d" stroke-width="4" stroke-linecap="round" transform="rotate(${a} 32 32)"/>`).join('')}</g>`
+      : `<path d="M40 14a18 18 0 1 0 12 30A15 15 0 0 1 40 14z" fill="#e8dcb5"/>`;
+    const cloud = (x, y, s, c) => `<g class="drift" transform="translate(${x} ${y}) scale(${s})"><path d="M14 40h34a12 12 0 0 0 0-24 16 16 0 0 0-30-4A12 12 0 0 0 14 40z" fill="${c}"/></g>`;
+    const drops = [18, 30, 42].map((x, i) => `<line class="drop" style="animation-delay:${i * .35}s" x1="${x}" y1="50" x2="${x - 3}" y2="58" stroke="#5b8fd1" stroke-width="3.5" stroke-linecap="round"/>`).join('');
+    const flakes = [18, 31, 44].map((x, i) => `<circle class="flake" style="animation-delay:${i * .8}s" cx="${x}" cy="52" r="3.2" fill="#cfe0f2"/>`).join('');
+    let g;
+    switch (kind) {
+      case 'clear': g = isDay ? sunOrMoon : sunOrMoon; break;
+      case 'partly': g = `<g transform="translate(10 -6) scale(.8)">${sunOrMoon}</g>${cloud(0, 10, .9, '#d9dee6')}`; break;
+      case 'cloudy': g = cloud(8, 0, .75, '#b9c1cc') + cloud(-2, 10, .9, '#d9dee6'); break;
+      case 'fog': g = cloud(0, 0, .9, '#d0d5dc') + [44, 52, 60].map(y => `<line class="fogline" x1="8" y1="${y}" x2="56" y2="${y}" stroke="#b9c1cc" stroke-width="4" stroke-linecap="round"/>`).join(''); break;
+      case 'rain': g = cloud(0, -4, .9, '#aab4c2') + drops; break;
+      case 'snow': g = cloud(0, -4, .9, '#cdd5df') + flakes; break;
+      default: g = cloud(0, -4, .9, '#8f99a8') + `<path class="flash" d="M34 40l-8 12h7l-4 10 11-14h-7l5-8z" fill="#f2c94c"/>`;
+    }
+    return `<svg viewBox="0 0 64 64">${g}</svg>`;
+  }
+
+  let wx = store.get('bc-weather', null);
+  function renderWeather() {
+    if (!wx) { $('weather').innerHTML = ''; return; }
+    const [kind, label] = WMO(wx.code);
+    $('weather').innerHTML = `${icon(kind, wx.isDay)}<span>${Math.round(wx.temp)}°<span id="wdesc">${label}</span></span>`;
+  }
+  async function updateWeather() {
+    if (!place) return;
+    const lat = place.lat.toFixed(1), lon = place.lon.toFixed(1);
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=1&timeformat=unixtime`;
+    try {
+      const r = await fetch(url); if (!r.ok) throw 0;
+      const j = await r.json();
+      wx = { temp: j.current.temperature_2m, code: j.current.weather_code, isDay: !!j.current.is_day, at: Date.now() };
+      store.set('bc-weather', wx);
+      if (j.daily && j.daily.sunrise) {
+        sun = { rise: j.daily.sunrise[0] * 1000, set: j.daily.sunset[0] * 1000, day: dayKey() };
+        store.set('bc-sun', sun);
+      }
+      renderWeather(); applyPalette();
+    } catch (_) { /* keep the last good weather on screen */ }
+  }
+
+  /* ---------------- Collage rendering ---------------- */
+  // Five spots scattered around the clock, as fractions of the screen so they
+  // spread out on any shape of screen. [x, y] are each bird's centre point.
+  const SPOTS_LANDSCAPE = [ [0.18, 0.17], [0.82, 0.17], [0.14, 0.60], [0.86, 0.60], [0.50, 0.77] ];
+  const SPOTS_PORTRAIT  = [ [0.22, 0.15], [0.78, 0.15], [0.22, 0.66], [0.78, 0.66], [0.50, 0.82] ];
+  const SIZES = [1.0, 0.9, 0.82, 0.76, 0.7]; // most recent is largest
+  const birdEls = [];
+  for (let i = 0; i < CFG.shown; i++) {
+    const el = document.createElement('div'); el.className = 'bird';
+    $('birds').appendChild(el); birdEls.push(el);
+  }
+  function layout() {
+    const spots = portrait ? SPOTS_PORTRAIT : SPOTS_LANDSCAPE;
+    birdEls.forEach((el, i) => {
+      el.style.left = (spots[i][0] * W) + 'px';
+      el.style.top = (spots[i][1] * H - 110) + 'px';
+    });
+    // Clock block sits a little above the middle; "Listening…" sits where the bottom bird goes
+    $('clock').style.top = (H * (portrait ? 0.43 : 0.47) - 171) + 'px';
+    $('empty').style.top = (H * (portrait ? 0.80 : 0.77)) + 'px';
+  }
+  fit();
+
+  /* Only animals: BirdNET also has sound classes for people and machines. Never show those. */
+  const NOT_ANIMAL = new Set(['Human vocal', 'Human non-vocal', 'Human whistle', 'Engine', 'Siren', 'Gun',
+                              'Fireworks', 'Power tools', 'Noise', 'Environmental']);
+  // Remove any that were saved before this rule existed
+  (() => {
+    let changed = false;
+    for (const sci of Object.keys(today.species)) {
+      if (NOT_ANIMAL.has(sci)) { today.total = Math.max(0, today.total - today.species[sci].count); delete today.species[sci]; changed = true; }
+    }
+    const kept = today.slots.filter(s => today.species[s]);
+    if (kept.length !== today.slots.length) { today.slots = kept; changed = true; }
+    if (changed) saveToday();
+  })();
+
+  function ago(ms) {
+    const s = Math.round((Date.now() - ms) / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.round(s / 60); if (m < 60) return `${m} min ago`;
+    const h = Math.floor(m / 60); return `${h} hr ago`;
+  }
+
+  let lastFresh = null;
+  function renderBirds() {
+    const sp = today.species;
+    const slots = today.slots.filter(s => sp[s]);
+    // Rank birds on screen by how recently they were heard
+    const rank = slots.slice().sort((a, b) => sp[b].last - sp[a].last);
+    for (let i = 0; i < CFG.shown; i++) {
+      const el = birdEls[i], sci = slots[i];
+      if (!sci) { el.classList.remove('show'); el.innerHTML = ''; el.dataset.sci = ''; continue; }
+      const b = sp[sci], r = rank.indexOf(sci);
+      if (el.dataset.sci !== sci) {
+        const src = picFor(sci);
+        el.innerHTML = `<div class="pic">${src ? `<img alt="" src="${src}">` : `<div class="noimg">${b.common[0]}</div>`}</div>` +
+          `<div class="name"></div><div class="ago"></div>`;
+        el.querySelector('.name').textContent = b.common;
+        el.dataset.sci = sci;
+      } else if (!el.querySelector('img') && picFor(sci)) {
+        el.querySelector('.pic').innerHTML = `<img alt="" src="${picFor(sci)}">`;
+      }
+      el.querySelector('.ago').textContent = ago(b.last);
+      el.style.transform = `scale(${SIZES[r] || 0.6})`;
+      el.style.zIndex = 10 - r;
+      el.classList.add('show');
+      if (sci === lastFresh) { el.classList.remove('fresh'); void el.offsetWidth; el.classList.add('fresh'); }
+    }
+    lastFresh = null;
+    const n = Object.keys(sp).length;
+    $('count').innerHTML = n ? `<b>${today.total}</b> detection${today.total === 1 ? '' : 's'} today · <b>${n}</b> species` : '';
+    $('empty').style.display = n ? 'none' : 'block';
+  }
+
+  function record(hit) {
+    rollDay();
+    const now = Date.now(), sci = hit.scientificName;
+    let b = today.species[sci];
+    if (b && now - b.last < CFG.recount) { b.last = now; saveToday(); return; } // same song, still going
+    if (!b) b = today.species[sci] = { common: hit.commonName, count: 0, first: now, last: now };
+    b.count++; b.last = now; today.total++;
+    if (!today.slots.includes(sci)) {
+      if (today.slots.length < CFG.shown) today.slots.push(sci);
+      else {
+        // Replace whichever bird on screen was heard longest ago, keeping the others in place
+        let oldest = 0;
+        today.slots.forEach((s, i) => { if (!today.species[s] || today.species[s].last < today.species[today.slots[oldest]].last) oldest = i; });
+        today.slots[oldest] = sci;
+      }
+    }
+    lastFresh = sci;
+    saveToday(); renderBirds();
+  }
+
+  /* ---------------- Status line ---------------- */
+  function status(text, state) {
+    $('stext').textContent = text;
+    $('dot').className = state || '';
+  }
+
+  /* ---------------- BirdNET engine (runs on this iPad in a background worker) ---------------- */
+  let worker = null, ready = false, busy = false, msgId = 0;
+  const pending = {}; // species -> time of first weak hit
+
+  function startWorker() {
+    return new Promise((resolve, reject) => {
+      const p = new URLSearchParams({
+        tf: new URL('tf.min.js', location.href).href,
+        root: new URL('.', location.href).href.replace(/\/$/, ''),
+        lang: 'en_us',
+      });
+      worker = new Worker('birdnet-worker.js?' + p.toString());
+      worker.onerror = e => { status('Bird ID engine failed to load', 'warn'); reject(e); };
+      worker.onmessage = ({ data }) => {
+        switch (data.message) {
+          case 'load_model': case 'warmup': case 'load_geomodel': case 'load_labels':
+            status(`Loading bird ID… ${data.progress | 0}%`, 'warn');
+            $('startmsg').textContent = `Loading bird ID… ${data.progress | 0}%`;
+            break;
+          case 'loaded':
+            ready = true;
+            lastResult = Date.now(); // give the first analysis time before any "slow" warning
+            if (data.backend !== 'webgl') console.warn('BirdNET backend:', data.backend);
+            if (place) worker.postMessage({ message: 'area-scores', latitude: place.lat, longitude: place.lon });
+            resolve(data.backend);
+            break;
+          case 'detections': busy = false; onDetections(data); break;
+        }
+      };
+    });
+  }
+
+  function onDetections({ hits, top, ms }) {
+    lastResult = Date.now();
+    if (CFG.debug && top) {
+      $('debug').textContent = `top: ${top.commonName} ${(top.confidence * 100).toFixed(0)}% (geo ${(top.geoscore * 100).toFixed(0)}%)  ·  ${ms} ms`;
+    }
+    const now = Date.now();
+    for (const h of hits) {
+      if (NOT_ANIMAL.has(h.scientificName)) continue;         // people, engines, sirens, noise: never shown
+      if (place && h.geoscore < CFG.geo) continue;           // not expected here this week
+      if (h.confidence >= CFG.strong) { record(h); delete pending[h.scientificName]; continue; }
+      if (h.confidence >= CFG.weak) {
+        const first = pending[h.scientificName];
+        if (first && now - first <= CFG.confirmWindow) { record(h); delete pending[h.scientificName]; }
+        else pending[h.scientificName] = now;
+      }
+    }
+  }
+
+  /* ---------------- Microphone ---------------- */
+  let ctx = null, stream = null, ring = null, w = 0, filled = 0, lastAudio = 0, lastResult = 0, peak = 0;
+
+  async function startMic() {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: SAMPLE_RATE, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    if (ctx.state !== 'running') await ctx.resume();
+    if (Math.abs(ctx.sampleRate - SAMPLE_RATE) > 1) console.warn('Audio is running at', ctx.sampleRate, 'Hz');
+    const src = ctx.createMediaStreamSource(stream);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 150; hp.Q.value = 0.707; // cut traffic/wind rumble
+    await ctx.audioWorklet.addModule('audio-processor.js');
+    const node = new AudioWorkletNode(ctx, 'audio-processor');
+    ring = new Float32Array(WINDOW); w = 0; filled = 0;
+    node.port.onmessage = e => {
+      const a = e.data;
+      for (let i = 0; i < a.length; i++) {
+        const v = a[i]; ring[w] = v; w = (w + 1) % WINDOW;
+        const av = v < 0 ? -v : v; if (av > peak) peak = av;
+      }
+      filled = Math.min(WINDOW, filled + a.length);
+      lastAudio = Date.now();
+    };
+    src.connect(hp); hp.connect(node); node.connect(ctx.destination); // worklet outputs silence
+    stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => needTap('The microphone stopped. Tap to start again.')));
+  }
+
+  function latestWindow() {
+    const out = new Float32Array(WINDOW);
+    out.set(ring.subarray(w)); out.set(ring.subarray(0, w), WINDOW - w);
+    return out;
+  }
+
+  function analyzeLoop() {
+    setInterval(() => {
+      if (!ready || busy || !ring || filled < WINDOW) return;
+      if (Date.now() - lastAudio > 2000) return;
+      busy = true;
+      const win = latestWindow();
+      worker.postMessage({ message: 'detect', pcmAudio: win, minConfidence: CFG.weak, id: ++msgId }, [win.buffer]);
+      setTimeout(() => { busy = false; }, 15000); // never get stuck if a result is lost
+    }, CFG.interval);
+  }
+
+  /* ---------------- Health check: show a clear message if listening stops ---------------- */
+  function watchdog() {
+    setInterval(() => {
+      $('levelbar').style.width = Math.min(100, Math.round(Math.sqrt(peak) * 160)) + '%'; peak = 0;
+      if (!ctx) return;
+      if (ctx.state !== 'running') { ctx.resume().catch(() => {}); }
+      const quiet = Date.now() - lastAudio, stale = Date.now() - lastResult;
+      if (quiet > 10000) { status('Microphone paused', 'warn'); if (quiet > 30000) needTap('Listening paused. Tap to start again.'); }
+      else if (!ready) { /* loading message is shown by the engine */ }
+      else if (stale > 20000) status('Bird ID is running slowly', 'warn');
+      else status(place ? 'Listening' : 'Listening (location off: no local filter or weather)', 'on');
+    }, 1000);
+  }
+
+  function needTap(msg) {
+    $('start').classList.remove('hidden');
+    $('startbtn').textContent = 'Start listening';
+    $('startmsg').textContent = msg || '';
+  }
+
+  /* ---------------- Keep the screen awake (also set Auto-Lock to Never) ---------------- */
+  let lock = null;
+  async function wake() {
+    try { if ('wakeLock' in navigator && !lock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch (_) {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { wake(); if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {}); }
+  });
+
+  /* ---------------- Start (Safari only allows the mic after a tap) ---------------- */
+  let engine = null, loopsOn = false;
+  function goFullScreen() {
+    // Opened from the home-screen icon it's already full screen. In a Safari tab, ask for it.
+    const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+    if (standalone || document.fullscreenElement || document.webkitFullscreenElement) return;
+    const el = document.documentElement;
+    try {
+      const r = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' })
+              : el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null;
+      if (r && r.catch) r.catch(() => {});
+    } catch (_) { /* not supported here: Add to Home Screen gives full screen instead */ }
+  }
+
+  $('startbtn').addEventListener('click', async () => {
+    goFullScreen(); // must happen right away, inside the tap
+    $('startbtn').textContent = 'Starting…';
+    $('startmsg').textContent = '';
+    try {
+      if (!ctx || ctx.state === 'closed' || !stream || stream.getAudioTracks().every(t => t.readyState === 'ended')) {
+        if (ctx) { try { ctx.close(); } catch (_) {} }
+        await startMic();
+      } else await ctx.resume();
+    } catch (e) {
+      needTap('Microphone permission is needed. In Settings › Safari › Microphone, choose Allow, then tap again.');
+      return;
+    }
+    wake();
+    if (!engine) engine = startWorker();
+    if (!loopsOn) { loopsOn = true; analyzeLoop(); watchdog(); }
+    getLocation().then(p => {
+      if (!p) return;
+      if (ready) worker.postMessage({ message: 'area-scores', latitude: p.lat, longitude: p.lon });
+      updateWeather();
+    });
+    $('start').classList.add('hidden'); // loading progress continues in the corner
+    try { await engine; } catch (_) { needTap('The bird ID engine could not start on this browser.'); }
+  });
+
+  /* ---------------- Timers ---------------- */
+  tickClock(); applyPalette(); renderWeather(); renderBirds();
+  setInterval(tickClock, 1000);
+  setInterval(() => { applyPalette(); rollDay(); renderBirds(); }, 60000);
+  setInterval(updateWeather, 20 * 60000);
+  if (place) updateWeather();
+  if (CFG.debug) window.__bc = { today: () => today, record, onDetections, place: () => place };
+
+  /* ---------------- Offline cache (makes the 60 MB model load once) ---------------- */
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
