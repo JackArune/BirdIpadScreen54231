@@ -410,6 +410,18 @@
   let hidden = new Set(store.get('bc-hidden', []));
   const blocked = sci => NOT_ANIMAL.has(sci) || hidden.has(sci);
 
+  /* Non-bird animals BirdNET knows that live in Western Canada. The location model can't score these,
+     so they bypass it (same confidence rules as birds). Names must match en_us.txt exactly. */
+  const WEST_ANIMALS = new Set([
+    'Dog', 'Canis latrans', 'Canis lupus',                              // dog, coyote, gray wolf
+    'Tamiasciurus hudsonicus', 'Sciurus carolinensis',                  // red squirrel, eastern gray squirrel (Calgary, Vancouver)
+    'Odocoileus virginianus',                                           // white-tailed deer
+    'Lithobates sylvaticus', 'Anaxyrus cognatus', 'Anaxyrus americanus',// wood frog, Great Plains toad, American toad
+    'Pseudacris triseriata', 'Hyliola regilla',                         // striped chorus frog (sounds like boreal chorus frog), Pacific chorus frog
+    'Lithobates catesbeianus', 'Lithobates clamitans',                  // American bullfrog, green frog (introduced in BC)
+    'Gryllus pennsylvanicus', 'Oecanthus fultoni',                      // fall field cricket, snowy tree cricket
+  ]);
+
   // Remove blocked species from today's list (also cleans lists saved before a rule existed)
   function purgeBlocked() {
     let changed = false;
@@ -573,7 +585,9 @@
     const now = Date.now();
     for (const h of hits) {
       if (blocked(h.scientificName)) continue;                // people, machines, and birds hidden on this device
-      if (place && h.geoscore < CFG.geo) continue;           // not expected here this week
+      // Location filter: BirdNET's location model only knows birds and gives every other animal ~0,
+      // so non-birds from WEST_ANIMALS skip it; all other non-birds (eastern frogs, insects) stay filtered out.
+      if (place && !WEST_ANIMALS.has(h.scientificName) && h.geoscore < CFG.geo) continue;
       if (h.confidence >= CFG.strong) { record(h); delete pending[h.scientificName]; continue; }
       if (h.confidence >= CFG.weak) {
         const first = pending[h.scientificName];
