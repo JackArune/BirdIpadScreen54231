@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bird Collage">
 <meta name="theme-color" content="#1b2233">
+<meta name="robots" content="noindex, nofollow, noarchive">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>Bird Collage</title>
@@ -129,6 +130,27 @@
     background: #f4ecdc; color: #1b2233;
   }
   #startmsg { font-size: 17px; min-height: 24px; opacity: .8; }
+  #hiddeninfo { font-size: 15px; opacity: .75; }
+  #hiddeninfo button { font: inherit; color: inherit; background: none; border: 0; text-decoration: underline; padding: 4px; }
+
+  /* Press and hold a bird to hide it on this device */
+  .bird { -webkit-touch-callout: none; touch-action: manipulation; }
+  .bird img { -webkit-user-drag: none; pointer-events: none; }
+  .bird.holding .pic { transform: scale(.94); transition: transform .5s ease; }
+  #hidebox {
+    position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 24, 36, 0.55);
+  }
+  #hidebox.hidden { display: none; }
+  #hidebox .card {
+    background: #f4ecdc; color: #2c2a26; border-radius: 22px; padding: 26px 30px; max-width: 420px; text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  }
+  #hidebox h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+  #hidebox p { font-size: 17px; line-height: 1.4; color: #6f675a; margin-bottom: 20px; }
+  #hidebox button { font: inherit; font-size: 19px; font-weight: 600; padding: 12px 26px; border-radius: 30px; border: 0; margin: 0 6px; }
+  #hideyes { background: #2c2a26; color: #f4ecdc; }
+  #hideno { background: rgba(0,0,0,.08); color: #2c2a26; }
 
   /* Weather icon animations */
   .spin { transform-origin: 50% 50%; animation: spin 40s linear infinite; }
@@ -164,6 +186,15 @@
   <p>This iPad will listen for birds through its microphone and show who's singing. Sound is analyzed on this iPad and never uploaded.</p>
   <button id="startbtn">Start listening</button>
   <div id="startmsg"></div>
+  <div id="hiddeninfo"></div>
+</div>
+
+<div id="hidebox" class="hidden">
+  <div class="card">
+    <h2 id="hidetitle">Hide this bird?</h2>
+    <p>It will be removed from today and never shown again on this device. You can bring hidden birds back from the start screen.</p>
+    <button id="hideno">Cancel</button><button id="hideyes">Hide</button>
+  </div>
 </div>
 
 <script>
@@ -374,16 +405,69 @@
   /* Only animals: BirdNET also has sound classes for people and machines. Never show those. */
   const NOT_ANIMAL = new Set(['Human vocal', 'Human non-vocal', 'Human whistle', 'Engine', 'Siren', 'Gun',
                               'Fireworks', 'Power tools', 'Noise', 'Environmental']);
-  // Remove any that were saved before this rule existed
-  (() => {
+  /* Birds hidden on THIS device by press-and-hold (e.g. a "pheasant" that is really clanging dishes).
+     Stored only in this browser; each household tunes its own iPad. */
+  let hidden = new Set(store.get('bc-hidden', []));
+  const blocked = sci => NOT_ANIMAL.has(sci) || hidden.has(sci);
+
+  // Remove blocked species from today's list (also cleans lists saved before a rule existed)
+  function purgeBlocked() {
     let changed = false;
     for (const sci of Object.keys(today.species)) {
-      if (NOT_ANIMAL.has(sci)) { today.total = Math.max(0, today.total - today.species[sci].count); delete today.species[sci]; changed = true; }
+      if (blocked(sci)) { today.total = Math.max(0, today.total - today.species[sci].count); delete today.species[sci]; changed = true; }
     }
     const kept = today.slots.filter(s => today.species[s]);
     if (kept.length !== today.slots.length) { today.slots = kept; changed = true; }
     if (changed) saveToday();
-  })();
+    return changed;
+  }
+  purgeBlocked();
+
+  function showHiddenInfo() {
+    const box = $('hiddeninfo');
+    if (!hidden.size) { box.textContent = ''; return; }
+    const names = store.get('bc-hidden-names', {});
+    const list = [...hidden].map(s => names[s] || s).join(', ');
+    box.textContent = `Hidden on this device: ${list} `;
+    const b = document.createElement('button'); b.textContent = 'Show them again';
+    b.addEventListener('click', () => {
+      hidden = new Set(); store.set('bc-hidden', []); store.set('bc-hidden-names', {}); showHiddenInfo();
+    });
+    box.appendChild(b);
+  }
+  showHiddenInfo();
+
+  // Press and hold (0.7 s) on a bird to offer hiding it
+  let holdTimer = null, holdSci = null;
+  function askHide(sci) {
+    const b = today.species[sci]; if (!b) return;
+    holdSci = sci;
+    $('hidetitle').textContent = `Hide ${b.common}?`;
+    $('hidebox').classList.remove('hidden');
+  }
+  $('hideno').addEventListener('click', () => { holdSci = null; $('hidebox').classList.add('hidden'); });
+  $('hideyes').addEventListener('click', () => {
+    if (holdSci) {
+      const names = store.get('bc-hidden-names', {});
+      names[holdSci] = (today.species[holdSci] || {}).common || holdSci;
+      hidden.add(holdSci); store.set('bc-hidden', [...hidden]); store.set('bc-hidden-names', names);
+      delete pending[holdSci];
+      purgeBlocked(); renderBirds(); showHiddenInfo();
+    }
+    holdSci = null; $('hidebox').classList.add('hidden');
+  });
+  birdEls.forEach(el => {
+    const cancel = () => { clearTimeout(holdTimer); holdTimer = null; el.classList.remove('holding'); };
+    el.addEventListener('pointerdown', e => {
+      if (!el.dataset.sci) return;
+      el.classList.add('holding');
+      holdTimer = setTimeout(() => { cancel(); askHide(el.dataset.sci); }, 700);
+    });
+    el.addEventListener('pointerup', cancel);
+    el.addEventListener('pointerleave', cancel);
+    el.addEventListener('pointercancel', cancel);
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  });
 
   function ago(ms) {
     const s = Math.round((Date.now() - ms) / 1000);
@@ -488,7 +572,7 @@
     }
     const now = Date.now();
     for (const h of hits) {
-      if (NOT_ANIMAL.has(h.scientificName)) continue;         // people, engines, sirens, noise: never shown
+      if (blocked(h.scientificName)) continue;                // people, machines, and birds hidden on this device
       if (place && h.geoscore < CFG.geo) continue;           // not expected here this week
       if (h.confidence >= CFG.strong) { record(h); delete pending[h.scientificName]; continue; }
       if (h.confidence >= CFG.weak) {

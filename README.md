@@ -27,6 +27,7 @@ If the iPad ever shows "Tap to start", just tap. Safari needs a tap before it ca
 ## What you'll see
 
 - Up to five recent birds around the clock. The newest is biggest.
+- **Wrong bird? Press and hold it** for about a second, then tap **Hide**. It's removed from today and never shown again on that device (handy for a "Ring-necked Pheasant" that is really clanging dishes or a fountain). Hidden birds are listed on the start screen, with **Show them again** to undo.
 - Only animals. BirdNET can also recognise people, engines, sirens, guns, fireworks, power tools and noise; those are never shown or counted.
 - "N detections today · M species". A bird singing on and off counts once until it has been quiet for 15 seconds.
 - Bottom left: a green dot and a sound-level bar while it's listening.
