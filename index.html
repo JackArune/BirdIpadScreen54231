@@ -110,6 +110,40 @@
   @keyframes breathe { 50% { opacity: .35; } }
   #level { width: 54px; height: 6px; border-radius: 3px; background: rgba(128,128,128,.25); overflow: hidden; }
   #levelbar { height: 100%; width: 0%; background: var(--soft); transition: width .25s linear; }
+  /* Drawer: every species heard today. Tab on the right edge opens it. */
+  #drawertab {
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 30;
+    width: 44px; height: 112px; border: 0; border-radius: 16px 0 0 16px;
+    background: var(--card); color: var(--ink); font: inherit; font-size: 30px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px;
+    box-shadow: -2px 0 10px rgba(0,0,0,.08); transition: right .45s cubic-bezier(.2,.8,.2,1);
+  }
+  #drawertab small { font-size: 13px; font-weight: 600; color: var(--soft); }
+  #drawer {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 420px; z-index: 29;
+    background: var(--bg); color: var(--ink);
+    box-shadow: -8px 0 30px rgba(0,0,0,.18);
+    transform: translateX(105%); transition: transform .45s cubic-bezier(.2,.8,.2,1);
+    display: flex; flex-direction: column;
+  }
+  #stage.open #drawer { transform: none; }
+  #stage.open #drawertab { right: 420px; }
+  #drawerhead { padding: 26px 24px 14px; border-bottom: 1px solid rgba(128,128,128,.25); }
+  #drawerhead h2 { font-size: 26px; font-weight: 600; }
+  #drawerhead p { font-size: 16px; color: var(--soft); margin-top: 4px; }
+  #drawerlist { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px 24px; }
+  .drow { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 14px; -webkit-touch-callout: none; }
+  .drow + .drow { margin-top: 2px; }
+  .drow.holding { background: var(--card); }
+  .dpic { width: 72px; height: 60px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .dpic img { max-width: 72px; max-height: 60px; pointer-events: none; }
+  .dpic .noimg { width: 48px; height: 48px; margin: 0; font-size: 22px; border-radius: 50%; background: var(--card);
+                display: flex; align-items: center; justify-content: center; color: var(--soft); }
+  .dname { font-size: 19px; font-weight: 600; line-height: 1.2; }
+  .dmeta { font-size: 14px; color: var(--soft); margin-top: 3px; }
+  .dcount { margin-left: auto; font-size: 20px; font-weight: 600; color: var(--soft); padding-left: 8px; }
+  #drawerempty { padding: 30px 12px; font-size: 17px; color: var(--soft); text-align: center; }
+
   #credit { position: absolute; right: 24px; bottom: 16px; max-width: 52%; text-align: right; line-height: 1.35;
             font-size: 11px; color: var(--soft); opacity: .7; }
   #debug { position: absolute; left: 24px; bottom: 44px; font: 13px ui-monospace, Menlo, monospace; color: var(--soft); white-space: pre; }
@@ -178,6 +212,11 @@
   <div id="empty">Listening for birds…</div>
   <div id="debug"></div>
   <div id="status"><span id="dot"></span><span id="level"><span id="levelbar" style="display:block"></span></span><span id="stext">Starting…</span></div>
+  <button id="drawertab" aria-label="Show all birds heard today"><span id="tabarrow">‹</span><small id="tabcount"></small></button>
+  <div id="drawer" aria-hidden="true">
+    <div id="drawerhead"><h2>Heard today</h2><p id="drawersub"></p></div>
+    <div id="drawerlist"></div>
+  </div>
   <div id="credit">Bird ID by BirdNET (Cornell Lab / TU Chemnitz) · Some illustrations AI-generated with Canva; others from AvianVisitors, CC BY-NC-SA 4.0 · Weather data by Open-Meteo.com, CC BY 4.0</div>
 </div>
 
@@ -468,18 +507,20 @@
     }
     holdSci = null; $('hidebox').classList.add('hidden');
   });
-  birdEls.forEach(el => {
+  // Press-and-hold behaviour, shared by the collage birds and the drawer rows
+  function addHold(el, getSci) {
     const cancel = () => { clearTimeout(holdTimer); holdTimer = null; el.classList.remove('holding'); };
-    el.addEventListener('pointerdown', e => {
-      if (!el.dataset.sci) return;
+    el.addEventListener('pointerdown', () => {
+      const sci = getSci(); if (!sci) return;
       el.classList.add('holding');
-      holdTimer = setTimeout(() => { cancel(); askHide(el.dataset.sci); }, 700);
+      holdTimer = setTimeout(() => { cancel(); askHide(sci); }, 700);
     });
     el.addEventListener('pointerup', cancel);
     el.addEventListener('pointerleave', cancel);
-    el.addEventListener('pointercancel', cancel);
+    el.addEventListener('pointercancel', cancel);   // also fires when a finger starts scrolling the list
     el.addEventListener('contextmenu', e => e.preventDefault());
-  });
+  }
+  birdEls.forEach(el => addHold(el, () => el.dataset.sci));
 
   function ago(ms) {
     const s = Math.round((Date.now() - ms) / 1000);
@@ -517,7 +558,50 @@
     const n = Object.keys(sp).length;
     $('count').innerHTML = n ? `<b>${today.total}</b> detection${today.total === 1 ? '' : 's'} today · <b>${n}</b> species` : '';
     $('empty').style.display = n ? 'none' : 'block';
+    renderDrawer();
   }
+
+  /* ---------------- Drawer: every species heard today (from the same on-device list) ---------------- */
+  const clockTime = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !CFG.use24h });
+  let drawerOpen = false, drawerIdle = null;
+  function renderDrawer() {
+    const sp = today.species, list = Object.keys(sp).sort((a, b) => sp[b].last - sp[a].last);
+    $('tabcount').textContent = list.length ? String(list.length) : '';
+    if (!drawerOpen) return;   // only build the list while it's visible
+    $('drawersub').textContent = list.length
+      ? `${list.length} species · ${today.total} detection${today.total === 1 ? '' : 's'} · newest first`
+      : 'Nothing yet today';
+    const box = $('drawerlist'); box.innerHTML = '';
+    if (!list.length) { box.innerHTML = '<div id="drawerempty">Birds you hear today will be listed here.</div>'; return; }
+    for (const sci of list) {
+      const b = sp[sci], src = picFor(sci);
+      const row = document.createElement('div'); row.className = 'drow'; row.dataset.sci = sci;
+      row.innerHTML = `<div class="dpic">${src ? `<img alt="" src="${src}">` : '<div class="noimg"></div>'}</div>` +
+        `<div><div class="dname"></div><div class="dmeta"></div></div><div class="dcount"></div>`;
+      if (!src) row.querySelector('.noimg').textContent = b.common[0];
+      row.querySelector('.dname').textContent = b.common;
+      row.querySelector('.dmeta').textContent =
+        clockTime(b.first) === clockTime(b.last) ? `Heard at ${clockTime(b.last)}` : `Last ${clockTime(b.last)} · first ${clockTime(b.first)}`;
+      row.querySelector('.dcount').textContent = `${b.count}×`;
+      addHold(row, () => row.dataset.sci);   // press and hold here also offers Hide
+      box.appendChild(row);
+    }
+  }
+  function setDrawer(open) {
+    drawerOpen = open;
+    $('stage').classList.toggle('open', open);
+    $('drawer').setAttribute('aria-hidden', open ? 'false' : 'true');
+    $('tabarrow').textContent = open ? '›' : '‹';
+    clearTimeout(drawerIdle);
+    if (open) { renderDrawer(); $('drawerlist').scrollTop = 0; drawerIdle = setTimeout(() => setDrawer(false), 60000); }
+  }
+  $('drawertab').addEventListener('click', () => setDrawer(!drawerOpen));
+  // Any touch inside the drawer keeps it open another minute; it closes itself so the display returns to the collage
+  $('drawer').addEventListener('pointerdown', () => { clearTimeout(drawerIdle); drawerIdle = setTimeout(() => setDrawer(false), 60000); });
+  // Tapping the collage (outside the drawer) closes it
+  $('birds').parentElement.addEventListener('pointerdown', e => {
+    if (drawerOpen && !e.target.closest('#drawer') && !e.target.closest('#drawertab')) setDrawer(false);
+  });
 
   function record(hit) {
     rollDay();
