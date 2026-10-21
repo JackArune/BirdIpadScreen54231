@@ -28,6 +28,8 @@ If the iPad ever shows "Tap to start", just tap. Safari needs a tap before it ca
 
 - Up to five recent birds around the clock. The newest is biggest.
 - **See every bird heard today:** tap the arrow tab on the right edge. A drawer slides out listing all of today's species, newest first, with how many times each was heard and when. Tap the arrow or the collage to close it; it also closes by itself after a minute.
+- **Check a bird by ear (optional, off by default):** on the start screen, switch on **Save bird sounds for checking**. The iPad then keeps the best 3-second clip of each bird heard today. Birds with a saved sound show a small ▶; **tap the bird** on the collage, or its row in the drawer, to hear it (tap again to stop).
+  - Privacy: clips stay **only on this iPad** and are never uploaded. A clip may also catch other sounds nearby, such as voices, and anyone using the iPad can play them. All clips are deleted at midnight, when a bird is hidden, or straight away when the switch is turned off. About 150 KB per bird.
 - **Wrong bird? Press and hold it** (on the collage or in the drawer) for about a second, then tap **Hide**. It's removed from today and never shown again on that device (handy for a "Ring-necked Pheasant" that is really clanging dishes or a fountain). Hidden birds are listed on the start screen, with **Show them again** to undo.
 - Besides birds, it can show some local animals: dog, coyote, gray wolf, red and gray squirrels, white-tailed deer, wood frog, chorus frogs, toads, bullfrog, green frog and field/tree crickets.
 - Only animals. BirdNET can also recognise people, engines, sirens, guns, fireworks, power tools and noise; those are never shown or counted.

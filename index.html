@@ -91,6 +91,9 @@
   }
   .bird .ago { margin-top: 4px; font-size: 17px; color: var(--soft); font-weight: 500; }
   .bird.fresh .pic { animation: pop 1.4s ease-out; }
+  .bird .ago[data-clip]:not([data-clip=''])::after { content: ' · ' attr(data-clip); }
+  .bird.playing .pic { animation: listen 1.2s ease-in-out infinite; }
+  @keyframes listen { 50% { transform: scale(1.06); } }
   @keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
   #empty {
@@ -164,6 +167,17 @@
     background: #f4ecdc; color: #1b2233;
   }
   #startmsg { font-size: 17px; min-height: 24px; opacity: .8; }
+  /* Optional: save one sound clip per bird for checking (off by default) */
+  #savewrap { max-width: 560px; text-align: left; background: rgba(255,255,255,.08); border-radius: 16px; padding: 14px 18px; }
+  #savewrap label { display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 600; }
+  #saveaudio { width: 26px; height: 26px; accent-color: #f4ecdc; flex: none; }
+  #savenote { font-size: 14.5px; line-height: 1.4; opacity: .75; margin-top: 6px; padding-left: 38px; }
+  .dplay {
+    flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; margin-left: 8px;
+    background: var(--card); color: var(--ink); font: inherit; font-size: 17px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .dplay.playing { background: var(--ink); color: var(--bg); }
   #hiddeninfo { font-size: 15px; opacity: .75; }
   #hiddeninfo button { font: inherit; color: inherit; background: none; border: 0; text-decoration: underline; padding: 4px; }
 
@@ -224,6 +238,10 @@
   <h1>Bird Collage</h1>
   <p>This iPad will listen for birds through its microphone and show who's singing. Sound is analyzed on this iPad and never uploaded.</p>
   <button id="startbtn">Start listening</button>
+  <div id="savewrap">
+    <label><input type="checkbox" id="saveaudio"> Save bird sounds for checking</label>
+    <div id="savenote">Keeps one 3-second clip per bird on this iPad. Tap a bird to hear it. A clip may also catch other sounds nearby, such as voices. Clips never leave this iPad and are deleted at midnight, or straight away if you switch this off.</div>
+  </div>
   <div id="startmsg"></div>
   <div id="hiddeninfo"></div>
 </div>
@@ -288,7 +306,11 @@
   const saveToday = () => store.set('bc-today', today);
 
   function rollDay() {
-    if (today.day !== dayKey()) { today = { day: dayKey(), total: 0, species: {}, slots: [] }; saveToday(); renderBirds(); }
+    if (today.day !== dayKey()) {
+      today = { day: dayKey(), total: 0, species: {}, slots: [] }; saveToday();
+      if (typeof clearClips === 'function') clearClips();   // saved sounds last only until midnight
+      renderBirds();
+    }
   }
 
   /* ---------------- Illustrations (one bundle, loaded once) ---------------- */
@@ -503,24 +525,46 @@
       names[holdSci] = (today.species[holdSci] || {}).common || holdSci;
       hidden.add(holdSci); store.set('bc-hidden', [...hidden]); store.set('bc-hidden-names', names);
       delete pending[holdSci];
+      deleteClip(holdSci);
       purgeBlocked(); renderBirds(); showHiddenInfo();
     }
     holdSci = null; $('hidebox').classList.add('hidden');
   });
-  // Press-and-hold behaviour, shared by the collage birds and the drawer rows
+  // Touch behaviour shared by the collage birds and the drawer rows:
+  //   quick tap  -> play the saved sound (when sound saving is on and a clip exists)
+  //   hold 0.7 s -> offer to hide the bird on this device
   function addHold(el, getSci) {
-    const cancel = () => { clearTimeout(holdTimer); holdTimer = null; el.classList.remove('holding'); };
-    el.addEventListener('pointerdown', () => {
+    let downAt = null, x0 = 0, y0 = 0, downSci = null;
+    const cancel = () => { clearTimeout(holdTimer); holdTimer = null; el.classList.remove('holding'); downAt = null; };
+    el.addEventListener('pointerdown', e => {
       const sci = getSci(); if (!sci) return;
+      downSci = sci; downAt = Date.now(); x0 = e.clientX; y0 = e.clientY;
       el.classList.add('holding');
       holdTimer = setTimeout(() => { cancel(); askHide(sci); }, 700);
     });
-    el.addEventListener('pointerup', cancel);
+    el.addEventListener('pointermove', e => {
+      if (downAt && Math.hypot(e.clientX - x0, e.clientY - y0) > 12) cancel();   // a drag or scroll, not a tap
+    });
+    el.addEventListener('pointerup', () => {
+      const tapped = downAt && Date.now() - downAt < 700;
+      cancel();
+      if (tapped && saveAudio && clipInfo.has(downSci)) togglePlay(downSci);
+    });
     el.addEventListener('pointerleave', cancel);
     el.addEventListener('pointercancel', cancel);   // also fires when a finger starts scrolling the list
     el.addEventListener('contextmenu', e => e.preventDefault());
   }
   birdEls.forEach(el => addHold(el, () => el.dataset.sci));
+
+  // Show which birds have a saved sound (small ▶) and which one is playing
+  function markPlaying() {
+    birdEls.forEach(el => {
+      const sci = el.dataset.sci, ago = el.querySelector('.ago');
+      el.classList.toggle('playing', !!sci && sci === playingSci);
+      if (ago) ago.dataset.clip = sci && saveAudio && clipInfo.has(sci) ? (sci === playingSci ? '■' : '▶') : '';
+    });
+    if (drawerOpen) renderDrawer();
+  }
 
   function ago(ms) {
     const s = Math.round((Date.now() - ms) / 1000);
@@ -549,6 +593,7 @@
         el.querySelector('.pic').innerHTML = `<img alt="" src="${picFor(sci)}">`;
       }
       el.querySelector('.ago').textContent = ago(b.last);
+      el.querySelector('.ago').dataset.clip = saveAudio && clipInfo.has(sci) ? (sci === playingSci ? '■' : '▶') : '';
       el.style.transform = `scale(${SIZES[r] || 0.6})`;
       el.style.zIndex = 10 - r;
       el.classList.add('show');
@@ -561,6 +606,102 @@
     renderDrawer();
   }
 
+  /* ---------------- Optional sound clips for checking (OFF by default) ----------------
+     When the start-screen switch is on, the best-scoring 3-second clip of each species today is kept
+     in this browser's IndexedDB on this device only. Never uploaded. Deleted at midnight, when the
+     switch is turned off, or when that species is hidden. */
+  let saveAudio = !!store.get('bc-save-audio', false);
+  const clipInfo = new Map();          // sci -> confidence of the saved clip (in memory, mirrors IndexedDB)
+  const idb = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('bird-collage', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('clips');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }));
+    const run = (mode, fn) => open().then(db => new Promise((res, rej) => {
+      const t = db.transaction('clips', mode), req = fn(t.objectStore('clips'));
+      t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    }));
+    return {
+      get: k => run('readonly', s => s.get(k)),
+      put: (k, v) => run('readwrite', s => s.put(v, k)),
+      del: k => run('readwrite', s => s.delete(k)),
+      clear: () => run('readwrite', s => s.clear()),
+      keys: () => run('readonly', s => s.getAllKeys()),
+    };
+  })();
+  function clearClips() {
+    clipInfo.clear(); stopPlay();
+    return idb.clear().catch(() => {});
+  }
+  function deleteClip(sci) {
+    clipInfo.delete(sci); if (playingSci === sci) stopPlay();
+    idb.del(sci).catch(() => {});
+  }
+  // On start: forget clips from other days (or all of them if the switch is off)
+  (async () => {
+    try {
+      const keys = await idb.keys();
+      for (const k of keys) {
+        const v = await idb.get(k);
+        if (!saveAudio || !v || v.day !== dayKey()) await idb.del(k); else clipInfo.set(k, v.conf);
+      }
+      markPlaying();
+    } catch (_) { /* storage unavailable (e.g. private browsing): clips simply aren't kept */ }
+  })();
+
+  // 3 s at 48 kHz float -> 24 kHz 16-bit mono WAV, gently normalised so quiet birds are audible (~144 KB)
+  function toWav(f32) {
+    const n = Math.floor(f32.length / 2), pcm = new Int16Array(n);
+    let pk = 1e-4; for (let i = 0; i < f32.length; i++) { const a = Math.abs(f32[i]); if (a > pk) pk = a; }
+    const gain = Math.min(8, 0.9 / pk);
+    for (let i = 0; i < n; i++) {
+      const v = Math.max(-1, Math.min(1, (f32[2 * i] + f32[2 * i + 1]) * 0.5 * gain));
+      pcm[i] = v * 32767;
+    }
+    const buf = new ArrayBuffer(44 + pcm.byteLength), d = new DataView(buf), rate = 24000;
+    const txt = (o, s) => { for (let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+    txt(0, 'RIFF'); d.setUint32(4, 36 + pcm.byteLength, true); txt(8, 'WAVE'); txt(12, 'fmt ');
+    d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+    d.setUint32(24, rate, true); d.setUint32(28, rate * 2, true); d.setUint16(32, 2, true); d.setUint16(34, 16, true);
+    txt(36, 'data'); d.setUint32(40, pcm.byteLength, true);
+    new Int16Array(buf, 44).set(pcm);
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+  function maybeSaveClip(sci, conf, f32) {
+    if (!saveAudio || !f32 || !today.species[sci]) return;
+    if (conf <= (clipInfo.get(sci) || 0)) return;           // keep only the best clip per species
+    clipInfo.set(sci, conf);
+    idb.put(sci, { day: dayKey(), conf, blob: toWav(f32) })
+      .then(() => markPlaying())
+      .catch(() => clipInfo.delete(sci));
+  }
+
+  // Playback through the already-running audio engine (no extra permission needed).
+  // While a clip plays, and for 3.5 s after, analysis pauses so the iPad doesn't "hear" its own playback.
+  let playingSci = null, playingSrc = null, playingUntil = 0;
+  function stopPlay() {
+    if (playingSrc) { try { playingSrc.onended = null; playingSrc.stop(); } catch (_) {} }
+    if (playingSci) playingUntil = Date.now() + 3500;
+    playingSrc = null; playingSci = null;
+    markPlaying();
+  }
+  async function togglePlay(sci) {
+    if (playingSci === sci) { stopPlay(); return; }
+    stopPlay();
+    if (!ctx) return;
+    try {
+      const v = await idb.get(sci); if (!v) return;
+      const audio = await ctx.decodeAudioData(await v.blob.arrayBuffer());
+      const src = ctx.createBufferSource(); src.buffer = audio; src.connect(ctx.destination);
+      playingSci = sci; playingSrc = src; playingUntil = Date.now() + 60000;
+      src.onended = () => { if (playingSrc === src) stopPlay(); };
+      src.start();
+      markPlaying();
+    } catch (_) { stopPlay(); }
+  }
+
   /* ---------------- Drawer: every species heard today (from the same on-device list) ---------------- */
   const clockTime = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !CFG.use24h });
   let drawerOpen = false, drawerIdle = null;
@@ -569,7 +710,8 @@
     $('tabcount').textContent = list.length ? String(list.length) : '';
     if (!drawerOpen) return;   // only build the list while it's visible
     $('drawersub').textContent = list.length
-      ? `${list.length} species · ${today.total} detection${today.total === 1 ? '' : 's'} · newest first`
+      ? `${list.length} species · ${today.total} detection${today.total === 1 ? '' : 's'} · newest first` +
+        (saveAudio ? ' · sounds saved until midnight' : '')
       : 'Nothing yet today';
     const box = $('drawerlist'); box.innerHTML = '';
     if (!list.length) { box.innerHTML = '<div id="drawerempty">Birds you hear today will be listed here.</div>'; return; }
@@ -583,6 +725,14 @@
       row.querySelector('.dmeta').textContent =
         clockTime(b.first) === clockTime(b.last) ? `Heard at ${clockTime(b.last)}` : `Last ${clockTime(b.last)} · first ${clockTime(b.first)}`;
       row.querySelector('.dcount').textContent = `${b.count}×`;
+      if (saveAudio && clipInfo.has(sci)) {
+        const btn = document.createElement('button');
+        btn.className = 'dplay'; btn.textContent = '▶'; btn.setAttribute('aria-label', `Play ${b.common}`);
+        if (playingSci === sci) { btn.classList.add('playing'); btn.textContent = '■'; }
+        btn.addEventListener('pointerdown', e => e.stopPropagation());   // a tap on play is not a press-and-hold
+        btn.addEventListener('click', e => { e.stopPropagation(); togglePlay(sci); });
+        row.appendChild(btn);
+      }
       addHold(row, () => row.dataset.sci);   // press and hold here also offers Hide
       box.appendChild(row);
     }
@@ -661,8 +811,10 @@
     });
   }
 
-  function onDetections({ hits, top, ms }) {
+  const windows = new Map();   // analysis id -> copy of the 3 s audio, kept only while saving is on
+  function onDetections({ hits, top, ms, id }) {
     lastResult = Date.now();
+    const clip = windows.get(id); windows.delete(id);
     if (CFG.debug && top) {
       $('debug').textContent = `top: ${top.commonName} ${(top.confidence * 100).toFixed(0)}% (geo ${(top.geoscore * 100).toFixed(0)}%)  ·  ${ms} ms`;
     }
@@ -672,12 +824,14 @@
       // Location filter: BirdNET's location model only knows birds and gives every other animal ~0,
       // so non-birds from WEST_ANIMALS skip it; all other non-birds (eastern frogs, insects) stay filtered out.
       if (place && !WEST_ANIMALS.has(h.scientificName) && h.geoscore < CFG.geo) continue;
-      if (h.confidence >= CFG.strong) { record(h); delete pending[h.scientificName]; continue; }
-      if (h.confidence >= CFG.weak) {
+      if (h.confidence >= CFG.strong) { record(h); delete pending[h.scientificName]; }
+      else if (h.confidence >= CFG.weak) {
         const first = pending[h.scientificName];
         if (first && now - first <= CFG.confirmWindow) { record(h); delete pending[h.scientificName]; }
         else pending[h.scientificName] = now;
       }
+      // If saving is on and this species is on today's list, keep this clip if it's its best so far
+      if (h.confidence >= CFG.weak) maybeSaveClip(h.scientificName, h.confidence, clip);
     }
   }
 
@@ -719,9 +873,14 @@
     setInterval(() => {
       if (!ready || busy || !ring || filled < WINDOW) return;
       if (Date.now() - lastAudio > 2000) return;
+      if (Date.now() < playingUntil) return;          // don't analyse our own clip playback
       busy = true;
-      const win = latestWindow();
-      worker.postMessage({ message: 'detect', pcmAudio: win, minConfidence: CFG.weak, id: ++msgId }, [win.buffer]);
+      const win = latestWindow(), id = ++msgId;
+      if (saveAudio) {                                 // keep a copy to save if it turns out to be a bird
+        windows.set(id, win.slice());
+        for (const k of windows.keys()) if (k < id - 4) windows.delete(k);
+      }
+      worker.postMessage({ message: 'detect', pcmAudio: win, minConfidence: CFG.weak, id }, [win.buffer]);
       setTimeout(() => { busy = false; }, 15000); // never get stuck if a result is lost
     }, CFG.interval);
   }
@@ -800,7 +959,17 @@
   setInterval(() => { applyPalette(); rollDay(); renderBirds(); }, 60000);
   setInterval(updateWeather, 20 * 60000);
   if (place) updateWeather();
-  if (CFG.debug) window.__bc = { today: () => today, record, onDetections, place: () => place };
+  /* ---------------- The save-sounds switch on the start screen ---------------- */
+  $('saveaudio').checked = saveAudio;
+  $('saveaudio').addEventListener('change', e => {
+    saveAudio = e.target.checked;
+    store.set('bc-save-audio', saveAudio);
+    if (!saveAudio) { windows.clear(); clearClips(); }   // switched off: delete every saved clip now
+    markPlaying();
+  });
+
+  if (CFG.debug) window.__bc = { today: () => today, record, onDetections, place: () => place,
+    clips: () => [...clipInfo.entries()], idbKeys: () => idb.keys(), togglePlay, playing: () => playingSci };
 
   /* ---------------- Offline cache (makes the 60 MB model load once) ---------------- */
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
