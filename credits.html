@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Bird Collage: Credits and licences</title>
+<style>
+  :root { --bg: #f4ecdc; --ink: #2c2a26; --soft: #6f675a; --rule: #ddd0b6; --link: #7a4a1f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1b2233; --ink: #efe6d3; --soft: #a39c8e; --rule: #2e3750; --link: #e3b27a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 17px/1.55 "Avenir Next", "Avenir", "Helvetica Neue", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { font-size: 30px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 20px; font-weight: 600; margin: 32px 0 6px; padding-top: 18px; border-top: 1px solid var(--rule); }
+  p, li { margin: 6px 0; }
+  ul { padding-left: 22px; }
+  .soft { color: var(--soft); font-size: 15px; }
+  a { color: var(--link); }
+  code { font-size: 14px; }
+  .back { display: inline-block; margin-top: 30px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Credits and licences</h1>
+  <p class="soft">Bird Collage is a free, non-commercial personal project. It is not affiliated with or endorsed by any of the projects below.</p>
+
+  <h2>Bird identification: BirdNET</h2>
+  <p>Bird and animal sounds are identified with the <strong>BirdNET</strong> models by the K. Lisa Yang Center for Conservation Bioacoustics, Cornell Lab of Ornithology, and Chemnitz University of Technology (<a href="https://birdnet.cornell.edu/" target="_blank" rel="noopener">birdnet.cornell.edu</a>).</p>
+  <ul>
+    <li><strong>Models</strong> (<code>model.json</code>, <code>group1-shard1of13.bin</code> to <code>group1-shard13of13.bin</code>, <code>area-model.json</code>, <code>group1-shard1of2.bin</code>, <code>group1-shard2of2.bin</code>, <code>en_us.txt</code>): used under the <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International licence (CC BY-NC-SA 4.0)</a>, the licence stated by the <a href="https://github.com/birdnet-team/BirdNET-Analyzer" target="_blank" rel="noopener">BirdNET-Analyzer</a> project. The BirdNET Live project distributes them under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>; this site follows the stricter, non-commercial terms. The model files are redistributed unmodified, as published in TensorFlow.js format by <a href="https://github.com/birdnet-team/real-time-pwa" target="_blank" rel="noopener">BirdNET Live</a>. The only change is that the location model's <code>model.json</code> was renamed to <code>area-model.json</code> so all files can sit in one folder.</li>
+    <li><strong>Engine code</strong> (<code>birdnet-worker.js</code>, <code>audio-processor.js</code>): from <a href="https://github.com/birdnet-team/real-time-pwa" target="_blank" rel="noopener">BirdNET Live</a>, Copyright (c) 2025 BirdNET-Team, <a href="BIRDNET-LIVE-LICENSE.txt">MIT License</a>. <code>birdnet-worker.js</code> was modified: flat file paths, and a compact <code>detect</code> message that returns only likely species.</li>
+    <li>Citation: Kahl, S., Wood, C. M., Eibl, M., &amp; Klinck, H. (2021). BirdNET: A deep learning solution for avian diversity monitoring. <em>Ecological Informatics</em>, 61, 101236.</li>
+  </ul>
+
+  <h2>Bird illustrations</h2>
+  <ul>
+    <li><strong>AI-generated illustrations, 40 species.</strong> Created by the site owner with Canva's AI image tools: American Crow, American Goldfinch, American Pipit, American Robin, Black-billed Magpie, Black-capped Chickadee, Blue Jay, Bohemian Waxwing, Brown-headed Cowbird, Canada Goose, Cedar Waxwing, Chipping Sparrow, Clay-colored Sparrow, Common Grackle, Common Raven, Downy Woodpecker, Evening Grosbeak, Franklin's Gull, Great Horned Owl, Hairy Woodpecker, House Sparrow, Killdeer, Least Flycatcher, Mallard, Merlin, Mountain Chickadee, Mourning Dove, Northern Flicker, Orange-crowned Warbler, Pileated Woodpecker, Pine Siskin, Red-breasted Nuthatch, Sora, Spotted Sandpiper, Tree Swallow, Violet-green Swallow, White-breasted Nuthatch, White-throated Sparrow, White-winged Crossbill and Yellow-rumped Warbler. These images were made with AI, not drawn by hand.</li>
+    <li><strong>All other illustrations.</strong> From the <a href="https://github.com/Twarner491/AvianVisitors" target="_blank" rel="noopener">AvianVisitors</a> project by Twarner491, licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. <strong>Changes made:</strong> transparent borders trimmed, resized to fit 320 × 320 pixels, converted to WebP, and bundled into <code>birds.json</code>. These adapted illustrations are shared under the same licence, CC BY-NC-SA 4.0.</li>
+  </ul>
+
+  <h2>Weather</h2>
+  <p>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. The data is shown as provided (current temperature, conditions, sunrise and sunset), with the temperature rounded to a whole degree.</p>
+
+  <h2>Software libraries</h2>
+  <p><a href="https://github.com/tensorflow/tfjs" target="_blank" rel="noopener">TensorFlow.js</a> 4.22.0 (<code>tf.min.js</code>), Copyright 2024 Google LLC, under the Apache License 2.0, redistributed unmodified. It bundles long.js (Apache License 2.0), core-js, regenerator-runtime and seedrandom (MIT License). Full licence texts and copyright notices are in <a href="THIRD-PARTY-NOTICES.txt">THIRD-PARTY-NOTICES.txt</a>.</p>
+
+  <h2>If you copy or reuse this project</h2>
+  <p>This site combines materials from other people under their own licences, listed above. If you copy or reuse any part of it, you are responsible for following those licences. The BirdNET models and the AvianVisitors illustrations are for <strong>non-commercial use only</strong>. The collage page and the AI-generated illustrations are the site owner's own work and are not licensed for reuse; please ask first.</p>
+
+  <h2>Disclaimer</h2>
+  <p class="soft">This project and the licensed materials above are provided "as is", without warranties of any kind, as set out in their licences. Bird identifications are automatic and can be wrong. This project is not affiliated with or endorsed by BirdNET, the Cornell Lab of Ornithology, Chemnitz University of Technology, AvianVisitors, Open-Meteo, Canva, Google or GitHub.</p>
+
+  <a class="back" href="./">‹ Back to the collage</a>
+</main>
+</body>
+</html>

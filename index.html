@@ -66,6 +66,8 @@
   }
   #weather svg { width: 74px; height: 74px; overflow: visible; }
   #wdesc { font-size: 20px; color: var(--soft); display: block; font-weight: 500; }
+  #wsrc { display: block; font-size: 11px; font-weight: 500; color: var(--soft); opacity: .75; text-decoration: none; margin-top: 2px; }
+  #credit a { color: inherit; }
 
   /* Birds */
   .bird {
@@ -231,7 +233,7 @@
     <div id="drawerhead"><h2>Heard today</h2><p id="drawersub"></p></div>
     <div id="drawerlist"></div>
   </div>
-  <div id="credit">Bird ID by BirdNET (Cornell Lab / TU Chemnitz) · Some illustrations AI-generated with Canva; others from AvianVisitors, CC BY-NC-SA 4.0 · Weather data by Open-Meteo.com, CC BY 4.0</div>
+  <div id="credit">Bird ID by BirdNET (Cornell Lab / TU Chemnitz), CC BY-NC-SA 4.0 · Some illustrations AI-generated with Canva; others from AvianVisitors, CC BY-NC-SA 4.0 · Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> · <a href="credits.html" target="_blank" rel="noopener">Credits &amp; licences</a></div>
 </div>
 
 <div id="start">
@@ -420,7 +422,8 @@
   function renderWeather() {
     if (!wx) { $('weather').innerHTML = ''; return; }
     const [kind, label] = WMO(wx.code);
-    $('weather').innerHTML = `${icon(kind, wx.isDay)}<span>${Math.round(wx.temp)}°<span id="wdesc">${label}</span></span>`;
+    $('weather').innerHTML = `${icon(kind, wx.isDay)}<span>${Math.round(wx.temp)}°<span id="wdesc">${label}</span>` +
+      `<a id="wsrc" href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a></span>`;
   }
   async function updateWeather() {
     if (!place) return;
